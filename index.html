@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#7a2e4a">
+<title>她的周期</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="她的周期">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+/* 布局：单列卡片式小工具，顶部周期圆环，中间月历，底部当天记录 */
+:root{
+  --bg:#fbf6f7; --card:#ffffff; --ink:#2b1a22; --mute:#8a7580; --line:#eadde2;
+  --period:#c23a5e; --period-soft:#f6d3dc; --predict:#e98aa3;
+  --fertile:#3f8f87; --fertile-soft:#d5ece9; --ovu:#2a6f68;
+  --accent:#7a2e4a;
+  --sans:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans SC","Hiragino Sans GB",system-ui,sans-serif;
+  --round:"Songti SC","STSong","SimSun","Noto Serif SC",serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#1a1216; --card:#251a20; --ink:#f3e7ec; --mute:#a8929c; --line:#3a2b33;
+  --period:#e2557b; --period-soft:#4a2231; --predict:#c96a85;
+  --fertile:#5cb8ad; --fertile-soft:#1e3a37; --ovu:#7fd3c8; --accent:#f08aa8; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans);
+  padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.wrap{max-width:440px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+header{display:flex;justify-content:space-between;align-items:center}
+h1{font:600 22px/1.2 var(--round);margin:0;letter-spacing:.04em;color:var(--accent)}
+.iconbtn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;font:13px var(--sans);cursor:pointer}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
+button{font-family:var(--sans)}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* 圆环 */
+.hero{display:flex;flex-direction:column;align-items:center;gap:10px;padding-block:20px}
+.ring{position:relative;width:220px;height:220px}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.big{font:700 52px/1 var(--round);font-variant-numeric:tabular-nums}
+.small{color:var(--mute);font-size:13px}
+.phase{display:inline-block;margin-top:6px;padding:2px 10px;border-radius:999px;font-size:13px;font-weight:600}
+.hero .tip{font-size:14px;text-align:center;color:var(--ink);max-width:30ch}
+.primary{background:var(--period);color:#fff;border:0;border-radius:999px;padding:10px 22px;font-size:15px;font-weight:600;cursor:pointer}
+.primary.ghost{background:transparent;color:var(--period);border:1.5px solid var(--period)}
+
+/* 统计 */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.stats b{display:block;font:700 20px/1.2 var(--round);font-variant-numeric:tabular-nums}
+.stats span{font-size:12px;color:var(--mute)}
+
+/* 日历 */
+.calhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.calhead strong{font:600 16px var(--round)}
+.nav{border:0;background:none;color:var(--ink);font-size:20px;width:36px;height:36px;border-radius:50%;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.wd{font-size:12px;color:var(--mute);padding-bottom:4px}
+.day{position:relative;aspect-ratio:1;max-width:100%;border:0;border-radius:50%;background:none;color:var(--ink);font-size:14px;cursor:pointer;font-variant-numeric:tabular-nums}
+.day.out{visibility:hidden}
+.day.period{background:var(--period);color:#fff;font-weight:600}
+.day.predict{background:transparent;box-shadow:inset 0 0 0 1.5px var(--predict);color:var(--predict)}
+.day.fertile{background:var(--fertile-soft);color:var(--ink)}
+.day.ovu{background:var(--fertile);color:#fff;font-weight:600}
+.day.today::after{content:"";position:absolute;left:50%;bottom:3px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--accent)}
+.day.period.today::after,.day.ovu.today::after{background:#fff}
+.day.sel{outline:2px solid var(--ink);outline-offset:1px}
+.day .dot{position:absolute;top:3px;right:5px;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12px;color:var(--mute)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+
+/* 当天记录 */
+.dayhead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.dayhead strong{font:600 16px var(--round)}
+.sec{margin-top:12px}
+.sec label.t{display:block;font-size:12px;color:var(--mute);letter-spacing:.06em;margin-bottom:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:none;color:var(--ink);border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer}
+.chip.on{background:var(--period-soft);border-color:var(--period);color:var(--ink)}
+textarea{width:100%;min-height:60px;border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:var(--bg);color:var(--ink);font:14px var(--sans);resize:vertical}
+
+/* 设置/备份 弹层 */
+.sheet{position:fixed;inset:0;background:rgba(20,10,15,.45);display:flex;align-items:flex-end;justify-content:center;z-index:5}
+.sheet .panel{background:var(--card);width:100%;max-width:440px;border-radius:20px 20px 0 0;padding:18px max(16px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));max-height:85vh;overflow:auto}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-block:8px;border-bottom:1px solid var(--line)}
+.row input[type=number]{width:70px;padding:6px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:15px var(--sans);text-align:center}
+.note{font-size:12px;color:var(--mute);line-height:1.6}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:999px;font-size:13px;z-index:9}
+@media (prefers-reduced-motion:no-preference){.ring circle.prog{transition:stroke-dashoffset .6s ease}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>她的周期</h1>
+    <button class="iconbtn" id="openSet" type="button">设置 · 备份</button>
+  </header>
+
+  <section class="card hero" id="hero"></section>
+
+  <section class="card stats" id="stats"></section>
+
+  <section class="card">
+    <div class="calhead">
+      <button class="nav" id="prev" type="button" aria-label="上个月">‹</button>
+      <strong id="monthTitle"></strong>
+      <button class="nav" id="next" type="button" aria-label="下个月">›</button>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="legend">
+      <span><i style="background:var(--period)"></i>经期</span>
+      <span><i style="box-shadow:inset 0 0 0 1.5px var(--predict)"></i>预测经期</span>
+      <span><i style="background:var(--fertile-soft)"></i>易孕期</span>
+      <span><i style="background:var(--fertile)"></i>排卵日</span>
+    </div>
+  </section>
+
+  <section class="card" id="dayCard"></section>
+
+  <p class="note">预测按她过去的记录推算，只是参考，不能用来避孕。周期长期不规律或疼得厉害，建议看医生。所有记录只存在这台设备的浏览器里，不联网也能用。</p>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="panel">
+    <div class="dayhead"><strong>设置 · 备份</strong><button class="iconbtn" id="closeSet" type="button">完成</button></div>
+    <div class="row"><span>默认周期长度（天）</span><input type="number" id="cycleLen" min="18" max="60"></div>
+    <div class="row"><span>默认经期长度（天）</span><input type="number" id="periodLen" min="1" max="12"></div>
+    <p class="note">记录满两次以上，会自动改用她自己的平均值。</p>
+    <div class="sec">
+      <label class="t" for="backup">备份 / 恢复</label>
+      <textarea id="backup" placeholder="点「生成备份」后，复制这段文字存好；换设备时粘贴回来点「恢复」"></textarea>
+      <div class="btns">
+        <button class="primary ghost" id="mkBackup" type="button">生成备份</button>
+        <button class="primary ghost" id="copyBackup" type="button">复制</button>
+        <button class="primary" id="restore" type="button">从上面恢复</button>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="btns"><button class="iconbtn" id="wipe" type="button">清空全部记录</button></div>
+      <p class="note" id="wipeMsg" hidden>再点一次「清空全部记录」确认删除，删除后无法找回。</p>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+const KEY='her-cycle-v1';
+const SYM=['痛经','腰酸','头痛','胸胀','长痘','疲倦','嘴馋','失眠'];
+const MOOD=['开心','平静','烦躁','低落','敏感'];
+const FLOW=['少','中','多'];
+
+let S={period:[],logs:{},cycleLen:28,periodLen:5};
+try{const raw=localStorage.getItem(KEY); if(raw) S=Object.assign(S,JSON.parse(raw));}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){toast('这台设备不允许保存，记录可能会丢');}}
+
+/* 日期工具 */
+const pad=n=>String(n).padStart(2,'0');
+const key=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const parse=k=>{const[a,b,c]=k.split('-').map(Number);return new Date(a,b-1,c);};
+const add=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
+const diff=(a,b)=>Math.round((Date.UTC(b.getFullYear(),b.getMonth(),b.getDate())-Date.UTC(a.getFullYear(),a.getMonth(),a.getDate()))/864e5);
+const today=new Date(); today.setHours(0,0,0,0);
+const TK=key(today);
+const fmt=d=>(d.getMonth()+1)+'月'+d.getDate()+'日';
+const WD='日一二三四五六';
+
+/* 计算：把经期日连成一段段 */
+function model(){
+  const days=[...new Set(S.period)].sort();
+  const runs=[];
+  for(const k of days){
+    const d=parse(k), last=runs[runs.length-1];
+    if(last && diff(last.end,d)<=2){last.end=d;} else runs.push({start:d,end:d});
+  }
+  const starts=runs.map(r=>r.start);
+  const gaps=[];
+  for(let i=1;i<starts.length;i++){const g=diff(starts[i-1],starts[i]); if(g>=18&&g<=60) gaps.push(g);}
+  const recent=gaps.slice(-6);
+  const cyc=recent.length?Math.round(recent.reduce((a,b)=>a+b,0)/recent.length):S.cycleLen;
+  const lens=runs.slice(-6).filter(r=>r.end<today||diff(r.start,today)>10).map(r=>diff(r.start,r.end)+1);
+  const plen=lens.length>=2?Math.round(lens.reduce((a,b)=>a+b,0)/lens.length):S.periodLen;
+  const last=runs[runs.length-1]||null;
+  // 预测未来 6 个周期
+  const preds=[];
+  if(last){
+    let s=add(last.start,cyc);
+    while(diff(s,today)>0) s=add(s,cyc); // 过期就往后推
+    for(let i=0;i<6;i++){preds.push(add(s,i*cyc));}
+  }
+  return {runs,starts,cyc,plen,last,preds,gapsCount:gaps.length};
+}
+
+function classify(M){
+  const map={};
+  for(const k of S.period) map[k]='period';
+  const markFertile=(start)=>{
+    const ov=add(start,-14);
+    for(let i=-5;i<=1;i++){const k=key(add(ov,i)); if(!map[k]) map[k]=i===0?'ovu':'fertile';}
+  };
+  if(M.last){
+    // 当前周期（距上次开始）的排卵期
+    markFertile(add(M.last.start,M.cyc));
+    for(const p of M.preds){
+      for(let i=0;i<M.plen;i++){const k=key(add(p,i)); if(!map[k]&&add(p,i)>today) map[k]='predict'; else if(!map[k]&&key(add(p,i))===TK) map[k]='predict';}
+      markFertile(add(p,M.cyc));
+    }
+  }
+  return map;
+}
+
+/* 渲染 */
+let view=new Date(today.getFullYear(),today.getMonth(),1);
+let sel=TK;
+const $=id=>document.getElementById(id);
+
+function phaseOf(M){
+  if(!M.last) return null;
+  const day=diff(M.last.start,today)+1;
+  const next=M.preds[0]; const toNext=diff(today,next);
+  const inPeriod=S.period.includes(TK);
+  const ov=add(next,-14); const dOv=diff(today,ov);
+  let name,color,bg,tip;
+  if(inPeriod){name='经期';color='#fff';bg='var(--period)';tip='多喝热水，注意保暖，别碰太凉的东西。';}
+  else if(day>M.cyc+7){name='推迟了';color='var(--period)';bg='var(--period-soft)';tip='比平常晚了一些。来了的话点下面的按钮记一下。';}
+  else if(dOv===0){name='排卵日';color='#fff';bg='var(--ovu)';tip='今天大概是排卵日。';}
+  else if(dOv>=-1&&dOv<=5){name='易孕期';color='var(--ink)';bg='var(--fertile-soft)';tip='处在易孕期。';}
+  else if(dOv>0){name='卵泡期';color='var(--ink)';bg='var(--line)';tip='一般这段时间精神和皮肤状态都不错。';}
+  else {name='黄体期';color='var(--ink)';bg='var(--line)';tip=toNext<=3?'快来了，包里备好卫生巾。':'情绪可能起伏一点，多体谅。';}
+  return {day,next,toNext,name,color,bg,tip,inPeriod};
+}
+
+function renderHero(M){
+  const h=$('hero');
+  const P=phaseOf(M);
+  if(!P){
+    h.innerHTML=`<div class="ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" stroke="var(--line)" stroke-width="7"/></svg>
+      <div class="center"><div class="big" style="font-size:30px">你好</div><div class="small">还没有记录</div></div></div>
+      <div class="tip">先记下最近一次月经开始的那天。今天来了就点按钮，之前来的就在下面日历里点那一天。</div>
+      <button class="primary" type="button" id="startToday">今天来了</button>`;
+    $('startToday').onclick=()=>startOn(TK);
+    return;
+  }
+  const r=44,C=2*Math.PI*r;
+  const frac=Math.min(1,(P.day-1)/M.cyc);
+  let big,unit;
+  if(P.inPeriod){big=P.day;unit='经期第 '+P.day+' 天';}
+  else if(P.name==='推迟了'){big=P.day-M.cyc;unit='推迟了几天';}
+  else{big=P.toNext;unit='天后来月经';}
+  h.innerHTML=`<div class="ring"><svg viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--line)" stroke-width="7"/>
+      <circle class="prog" cx="50" cy="50" r="${r}" fill="none" stroke="var(--period)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-frac)}"/></svg>
+      <div class="center"><div class="big">${big}</div><div class="small">${unit}</div>
+      <span class="phase" style="background:${P.bg};color:${P.color}">${P.name}</span></div></div>
+    <div class="small">周期第 ${P.day} 天 · 预计 ${fmt(P.next)}（周${WD[P.next.getDay()]}）</div>
+    <div class="tip">${P.tip}</div>
+    ${P.inPeriod?`<button class="primary ghost" type="button" id="endToday">今天结束了</button>`:`<button class="primary" type="button" id="startToday">今天来了</button>`}`;
+  const s=$('startToday'); if(s) s.onclick=()=>startOn(TK);
+  const e=$('endToday'); if(e) e.onclick=()=>{ // 去掉今天之后的经期标记
+    S.period=S.period.filter(k=>parse(k)<=today); save(); toast('已记下，经期到今天为止'); render();};
+}
+
+function renderStats(M){
+  $('stats').innerHTML=`<div><b>${M.cyc}</b><span>平均周期（天）</span></div>
+    <div><b>${M.plen}</b><span>平均经期（天）</span></div>
+    <div><b>${M.runs.length}</b><span>已记录次数</span></div>`;
+}
+
+function renderCal(M){
+  const map=classify(M);
+  $('monthTitle').textContent=view.getFullYear()+'年'+(view.getMonth()+1)+'月';
+  let html='';
+  for(const w of WD) html+=`<div class="wd">${w}</div>`;
+  const first=view.getDay();
+  const dim=new Date(view.getFullYear(),view.getMonth()+1,0).getDate();
+  for(let i=0;i<first;i++) html+=`<button class="day out" tabindex="-1" aria-hidden="true"></button>`;
+  for(let d=1;d<=dim;d++){
+    const k=key(new Date(view.getFullYear(),view.getMonth(),d));
+    const c=['day',map[k]||'',k===TK?'today':'',k===sel?'sel':''].join(' ');
+    const lg=S.logs[k]; const has=lg&&((lg.sym&&lg.sym.length)||lg.mood||lg.flow||lg.note);
+    html+=`<button class="${c}" data-k="${k}" type="button">${d}${has?'<span class="dot"></span>':''}</button>`;
+  }
+  $('grid').innerHTML=html;
+}
+
+function renderDay(){
+  const d=parse(sel); const isP=S.period.includes(sel); const future=d>today;
+  const lg=S.logs[sel]||{};
+  const chips=(list,field,multi)=>list.map(v=>{
+    const on=multi?(lg[field]||[]).includes(v):lg[field]===v;
+    return `<button class="chip ${on?'on':''}" type="button" data-f="${field}" data-v="${v}" data-m="${multi?1:0}">${v}</button>`;}).join('');
+  $('dayCard').innerHTML=`<div class="dayhead"><strong>${fmt(d)} 周${WD[d.getDay()]}${sel===TK?' · 今天':''}</strong>
+      ${future?'<span class="small">未来的日子不能记录</span>':`<button class="primary ${isP?'ghost':''}" type="button" id="togP">${isP?'取消经期':'标记为经期'}</button>`}</div>
+    ${future?'':`
+    ${isP?`<div class="sec"><label class="t">流量</label><div class="chips">${chips(FLOW,'flow',false)}</div></div>`:''}
+    <div class="sec"><label class="t">身体</label><div class="chips">${chips(SYM,'sym',true)}</div></div>
+    <div class="sec"><label class="t">心情</label><div class="chips">${chips(MOOD,'mood',false)}</div></div>
+    <div class="sec"><label class="t" for="noteBox">备注</label><textarea id="noteBox" placeholder="想记点什么都可以">${(lg.note||'').replace(/</g,'&lt;')}</textarea></div>`}`;
+  const t=$('togP'); if(t) t.onclick=()=>{
+    if(isP) S.period=S.period.filter(k=>k!==sel);
+    else{
+      // 如果和前一段经期不挨着，当作新的一次，自动补齐默认天数（不超过今天）
+      const M=model(); const near=S.period.some(k=>Math.abs(diff(parse(k),d))<=2);
+      if(near) S.period.push(sel); else return startOn(sel);
+    }
+    save(); render();
+  };
+  document.querySelectorAll('#dayCard .chip').forEach(b=>b.onclick=()=>{
+    const f=b.dataset.f,v=b.dataset.v,m=b.dataset.m==='1';
+    const L=S.logs[sel]||(S.logs[sel]={});
+    if(m){L[f]=L[f]||[]; L[f]=L[f].includes(v)?L[f].filter(x=>x!==v):[...L[f],v];}
+    else L[f]=L[f]===v?'':v;
+    save(); renderDay(); renderCal(model());
+  });
+  const nb=$('noteBox'); if(nb) nb.oninput=()=>{const L=S.logs[sel]||(S.logs[sel]={}); L.note=nb.value; save();};
+}
+
+function startOn(k){
+  const M=model(); const d=parse(k);
+  for(let i=0;i<M.plen;i++){const x=add(d,i); if(x<=today) S.period.push(key(x));}
+  S.period=[...new Set(S.period)];
+  save(); toast('已记下 '+fmt(d)+' 开始'); sel=k; render();
+}
+
+function render(){const M=model(); renderHero(M); renderStats(M); renderCal(M); renderDay();}
+
+$('grid').addEventListener('click',e=>{const b=e.target.closest('.day[data-k]'); if(!b) return; sel=b.dataset.k; renderCal(model()); renderDay();});
+$('prev').onclick=()=>{view=new Date(view.getFullYear(),view.getMonth()-1,1); renderCal(model());};
+$('next').onclick=()=>{view=new Date(view.getFullYear(),view.getMonth()+1,1); renderCal(model());};
+
+/* 设置 & 备份 */
+let wipeArmed=false;
+$('openSet').onclick=()=>{$('cycleLen').value=S.cycleLen;$('periodLen').value=S.periodLen;$('sheet').hidden=false;};
+$('closeSet').onclick=()=>{
+  const c=+$('cycleLen').value,p=+$('periodLen').value;
+  if(c>=18&&c<=60) S.cycleLen=c; if(p>=1&&p<=12) S.periodLen=p;
+  save(); $('sheet').hidden=true; wipeArmed=false; $('wipeMsg').hidden=true; render();};
+$('sheet').addEventListener('click',e=>{if(e.target.id==='sheet') $('closeSet').click();});
+$('mkBackup').onclick=()=>{$('backup').value='HERCYCLE:'+btoa(unescape(encodeURIComponent(JSON.stringify(S))));toast('备份已生成，复制存好');};
+$('copyBackup').onclick=()=>{const v=$('backup').value; if(!v){toast('先点「生成备份」');return;}
+  (navigator.clipboard?navigator.clipboard.writeText(v):Promise.reject()).then(()=>toast('已复制')).catch(()=>{$('backup').select();toast('已选中，手动复制一下');});};
+$('restore').onclick=()=>{
+  try{const v=$('backup').value.trim().replace(/^HERCYCLE:/,'');
+    const o=JSON.parse(decodeURIComponent(escape(atob(v))));
+    if(!Array.isArray(o.period)) throw 0;
+    S=Object.assign({period:[],logs:{},cycleLen:28,periodLen:5},o); save(); toast('恢复好了'); $('closeSet').click();
+  }catch(e){toast('这段备份文字不对，检查一下有没有复制完整');}
+};
+$('wipe').onclick=()=>{
+  if(!wipeArmed){wipeArmed=true;$('wipeMsg').hidden=false;return;}
+  S={period:[],logs:{},cycleLen:S.cycleLen,periodLen:S.periodLen}; save(); wipeArmed=false; $('wipeMsg').hidden=true; toast('已清空'); $('closeSet').click();
+};
+
+let tt; function toast(m){const t=$('toast'); t.textContent=m; t.hidden=false; clearTimeout(tt); tt=setTimeout(()=>t.hidden=true,2200);}
+
+render();
+if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});}
+})();
+</script>
+</body>
+</html>
